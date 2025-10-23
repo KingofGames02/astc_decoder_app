@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ASTC Texture Decoder - Batch Mode</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+    <script>
+      // Tailwind config for dark mode
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              // New Charcoal Theme
+              primary: '#36454F', // Charcoal
+              secondary: '#B0C4DE', // Silver-Blue (Premium Accent)
+              accent: '#e74c3c',
+              success: '#27ae60',
+              warning: '#f39c12',
+              error: '#e74c3c',
+              darkbg: '#1C1C1C', // Darker background
+              lightbg: '#f8fafc',
+            }
+          }
+        }
+      }
+    </script>
+</head>
+<body class="dark bg-darkbg text-gray-200 min-h-screen transition-colors duration-300">
+    <div class="max-w-5xl mx-auto px-4 py-8">
+        <header class="bg-primary text-white rounded-xl shadow-lg p-8 mb-8 text-center">
+            <h1 class="text-4xl font-bold mb-2">ASTC Texture Decoder</h1>
+            <p class="text-lg opacity-90">ASTC Decompression Tool</p>
+            <div class="text-secondary mt-2 text-sm">By KingofGames</div>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+            <div class="bg-darkbg rounded-xl shadow p-6">
+                <h2 class="text-2xl font-bold mb-4 border-b border-secondary pb-2 text-secondary">1. Load from Device</h2>
+                <div class="mb-4">
+                    <label class="block mb-2 font-semibold">Select ASTC Files:</label>
+                    <div class="relative flex items-center">
+                        <input type="file" id="fileInput" accept=".astc" class="absolute w-full h-full opacity-0 z-10 cursor-pointer" multiple />
+                        <div class="w-full border-2 border-dashed border-gray-600 rounded px-4 py-3 text-center bg-darkbg transition hover:border-secondary hover:bg-secondary/10" id="fileInputLabel">
+                            📁 Choose files or drag & drop here
+                        </div>
+                    </div>
+                </div>
+                <div class="w-full h-1 bg-gray-700 rounded mt-2 mb-2 overflow-hidden">
+                    <div class="h-full bg-secondary transition-all" id="fileProgress" style="width:0%"></div>
+                </div>
+                <button class="btn bg-secondary text-darkbg px-6 py-2 rounded hover:bg-gray-400 font-semibold transition w-full" onclick="loadFromFile()">
+                    🚀 Decode Files
+                </button>
+            </div>
+
+            <div class="bg-darkbg rounded-xl shadow p-6">
+                <h2 class="text-2xl font-bold mb-4 border-b border-secondary pb-2 text-secondary">2. Load from URL (Single File)</h2>
+                <div class="mb-4">
+                    <label class="block mb-2 font-semibold">ASTC File URL:</label>
+                    <input type="url" id="urlInput" class="w-full px-4 py-3 rounded border border-gray-700 bg-darkbg text-gray-200 focus:border-secondary focus:outline-none transition" 
+                        placeholder="https://example.com/texture.astc"
+                        value="https://dl.cdn.freefiremobile.com/live/ABHotUpdates/IconCDN/android/710050001_rgb.astc" />
+                </div>
+                <div class="w-full h-1 bg-gray-700 rounded mt-2 mb-2 overflow-hidden">
+                    <div class="h-full bg-secondary transition-all" id="urlProgress" style="width:0%"></div>
+                </div>
+                <button class="btn bg-secondary text-darkbg px-6 py-2 rounded hover:bg-gray-400 font-semibold transition w-full" onclick="loadFromURL()">
+                    📥 Download & Decode
+                </button>
+            </div>
+        </div>
+
+        <div class="bg-darkbg rounded-xl shadow p-6 mb-8 col-span-2">
+            <h2 class="text-2xl font-bold mb-4 border-b border-secondary pb-2 text-secondary">3. Results</h2>
+            <div id="status" class="text-center py-3 rounded font-semibold mb-4 bg-gray-800 text-gray-200">Ready to decode ASTC textures</div>
+
+            <div class="flex flex-col md:flex-row gap-4 mb-6">
+                <button class="btn bg-success text-white px-4 py-2 rounded font-semibold transition w-full disabled:opacity-50" onclick="downloadAllAsZip()" id="downloadAllBtn" style="display: none;">
+                    💾 Download All as ZIP
+                </button>
+                <button class="btn bg-warning text-darkbg px-4 py-2 rounded font-semibold transition w-full" onclick="clearBatchResults()">
+                    🗑️ Clear Results
+                </button>
+            </div>
+
+            <div id="outputContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                </div>
+            
+        </div>
+    </div>
+
+    <script src="astc-decode.js"></script>
+    <script>
+        // Store for decoded files to be zipped
+        let decodedFilesForZip = {};
+
+        // Initialize on page load
+        window.addEventListener('load', async () => {
+            updateStatus('Initializing ASTC decoder...', 'loading');
+            
+            try {
+                await initASTCDecoder();
+                updateStatus('ASTC decoder ready!', 'success');
+            } catch (error) {
+                updateStatus('Initialization failed: ' + error.message, 'error');
+            }
+
+            // Setup drag and drop
+            setupDragAndDrop();
+        });
+
+        // Setup drag and drop functionality
+        function setupDragAndDrop() {
+            const dropArea = document.getElementById('fileInputLabel');
+            
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, preventDefaults, false);
+            });
+            
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropArea.addEventListener(eventName, highlight, false);
+            });
+            
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, unhighlight, false);
+            });
+            
+            function highlight() {
+                dropArea.classList.add('border-secondary', 'bg-secondary/10');
+            }
+            
+            function unhighlight() {
+                dropArea.classList.remove('border-secondary', 'bg-secondary/10');
+            }
+            
+            dropArea.addEventListener('drop', handleDrop, false);
+            
+            function handleDrop(e) {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                
+                if (files.length > 0) {
+                    document.getElementById('fileInput').files = files;
+                    updateFileInfo(files);
+                }
+            }
+
+            // Update file info on manual change
+            document.getElementById('fileInput').addEventListener('change', (e) => {
+                updateFileInfo(e.target.files);
+            });
+        }
+
+        // Update status message
+        function updateStatus(message, type = '') {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = "text-center py-3 rounded font-semibold mb-4";
+            if (type === 'loading') status.classList.add('bg-warning', 'text-darkbg');
+            else if (type === 'success') status.classList.add('bg-success', 'text-white');
+            else if (type === 'error') status.classList.add('bg-error', 'text-white');
+            else status.classList.add('bg-gray-800', 'text-gray-200');
+        }
+
+        // Update file input label
+        function updateFileInfo(files) {
+            const label = document.getElementById('fileInputLabel');
+            if (files.length === 1) {
+                const file = files[0];
+                label.textContent = `📄 ${file.name} (${formatFileSize(file.size)})`;
+            } else if (files.length > 1) {
+                label.textContent = `📁 ${files.length} files selected`;
+            } else {
+                label.textContent = '📁 Choose files or drag & drop here';
+            }
+        }
+
+        // Format file size
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // Load and decode from file(s)
+        async function loadFromFile() {
+            const fileInput = document.getElementById('fileInput');
+            const files = fileInput.files;
+            
+            if (files.length === 0) {
+                updateStatus('Please select one or more ASTC files first', 'error');
+                return;
+            }
+            
+            // Clear previous results
+            clearBatchResults(false); // Do not reset file input
+            
+            // Show ZIP button if more than one file
+            if (files.length > 0) {
+                document.getElementById('downloadAllBtn').style.display = 'block';
+            }
+
+            updateStatus(`Processing ${files.length} file(s)...`, 'loading');
+            
+            let successCount = 0;
+            let errorCount = 0;
+
+            // Loop over all selected files
+            for (const file of files) {
+                try {
+                    await decodeASTCFile(file);
+                    successCount++;
+                } catch (error) {
+                    console.error(`Failed to process ${file.name}:`, error);
+                    errorCount++;
+                }
+            }
+
+            updateStatus(`Processing complete: ${successCount} success, ${errorCount} failed`, 'success');
+        }
+
+        // Load and decode from URL (single file)
+        async function loadFromURL() {
+            const urlInput = document.getElementById('urlInput');
+            const url = urlInput.value.trim();
+            
+            if (!url) {
+                updateStatus('Please enter a valid URL', 'error');
+                return;
+            }
+            
+            // Clear previous results
+            clearBatchResults();
+            document.getElementById('downloadAllBtn').style.display = 'block';
+
+            try {
+                updateStatus('Downloading from URL...', 'loading');
+                setProgress('urlProgress', 0);
+                
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error(`Server responded with ${response.status}`);
+                }
+
+                const contentLength = response.headers.get('content-length');
+                let receivedLength = 0;
+                
+                if (contentLength) {
+                    const reader = response.body.getReader();
+                    const chunks = [];
+                    
+                    while(true) {
+                        const {done, value} = await reader.read();
+                        if (done) break;
+                        chunks.push(value);
+                        receivedLength += value.length;
+                        setProgress('urlProgress', (receivedLength / contentLength) * 100);
+                    }
+                    
+                    const astcData = new Uint8Array(receivedLength);
+                    let position = 0;
+                    for(let chunk of chunks) {
+                        astcData.set(chunk, position);
+                        position += chunk.length;
+                    }
+                    
+                    await processASTCData(astcData, `URL: ${new URL(url).pathname.split('/').pop()}`);
+                } else {
+                    // Fallback for servers that don't provide content-length
+                    const arrayBuffer = await response.arrayBuffer();
+                    setProgress('urlProgress', 100);
+                    await processASTCData(new Uint8Array(arrayBuffer), `URL: ${new URL(url).pathname.split('/').pop()}`);
+                }
+                
+            } catch (error) {
+                updateStatus('Download failed: ' + error.message, 'error');
+                setProgress('urlProgress', 0);
+            }
+        }
+
+        // Helper function to decode a single file
+        async function decodeASTCFile(file) {
+            return new Promise((resolve, reject) => {
+                try {
+                    const reader = new FileReader();
+                    
+                    reader.onload = async (event) => {
+                        try {
+                            const arrayBuffer = event.target.result;
+                            await processASTCData(new Uint8Array(arrayBuffer), file.name);
+                            resolve();
+                        } catch (error) {
+                            reject(error);
+                        }
+                    };
+                    
+                    reader.onerror = () => {
+                        reject(new Error('File reading failed'));
+                    };
+                    
+                    reader.readAsArrayBuffer(file);
+                    
+                } catch (error) {
+                    reject(error);
+                }
+            });
+        }
+
+        // Process data and create a display card
+        async function processASTCData(astcData, filename) {
+            try {
+                if (!wasm) {
+                    updateStatus('Initializing decoder...', 'loading');
+                    await initASTCDecoder();
+                }
+                
+                // Parse header first
+                const header = parseASTCHeader(astcData);
+                
+                // Decode the texture
+                const decodedData = decodeASTCTexture(astcData);
+                
+                // --- Create Display Card ---
+                const container = document.getElementById('outputContainer');
+                const card = document.createElement('div');
+                card.className = 'bg-gray-800 rounded-xl p-4 shadow-lg flex flex-col';
+
+                // 1. Create Canvas
+                const newCanvas = document.createElement('canvas');
+                newCanvas.width = header.width;
+                newCanvas.height = header.height;
+                newCanvas.className = 'max-w-full rounded border border-secondary mb-3';
+                const newCtx = newCanvas.getContext('2d');
+                
+                const success = drawToCanvas(newCtx, decodedData, header.width, header.height);
+                
+                if (!success) {
+                    throw new Error('Failed to draw to canvas');
+                }
+
+                // 2. Create Info Panel
+                const infoDiv = document.createElement('div');
+                infoDiv.className = 'space-y-1 text-sm text-gray-300 mt-auto';
+                infoDiv.innerHTML = `
+                    <h4 class="text-lg font-bold text-secondary truncate mb-2" title="${filename}">${filename}</h4>
+                    <div class="flex justify-between py-1 border-b border-gray-700"><span>Dimensions:</span> <span>${header.width} × ${header.height}</span></div>
+                    <div class="flex justify-between py-1 border-b border-gray-700"><span>Block Size:</span> <span>${header.blockSize}</span></div>
+                    <div class="flex justify-between py-1 border-b border-gray-700"><span>File Size:</span> <span>${formatFileSize(astcData.length)}</span></div>
+                    <div class="flex justify-between py-1"><span>Decoded Size:</span> <span>${formatFileSize(decodedData.length)}</span></div>
+                `;
+                
+                card.appendChild(newCanvas);
+                card.appendChild(infoDiv);
+                container.appendChild(card);
+                
+                // Store data for ZIP download
+                decodedFilesForZip[filename] = {
+                    data: decodedData,
+                    width: header.width,
+                    height: header.height
+                };
+
+            } catch (error) {
+                updateStatus(`Error processing ${filename}: ${error.message}`, 'error');
+                console.error(`Decoding error for ${filename}:`, error);
+                throw error; // Propagate error
+            }
+        }
+
+        // Set progress bar
+        function setProgress(progressId, percent) {
+            document.getElementById(progressId).style.width = percent + '%';
+        }
+
+        // Download all decoded images as a single ZIP
+        async function downloadAllAsZip() {
+            if (Object.keys(decodedFilesForZip).length === 0) {
+                updateStatus('No files to download', 'warning');
+                return;
+            }
+
+            updateStatus('Creating ZIP file... Please wait', 'loading');
+            
+            try {
+                const zip = new JSZip();
+
+                for (const filename in decodedFilesForZip) {
+                    const file = decodedFilesForZip[filename];
+                    
+                    // Create a temporary canvas to get PNG data
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = file.width;
+                    tempCanvas.height = file.height;
+                    const tempCtx = tempCanvas.getContext('2d');
+                    drawToCanvas(tempCtx, file.data, file.width, file.height);
+
+                    // Convert canvas to PNG Blob
+                    const blob = await new Promise(resolve => tempCanvas.toBlob(resolve, 'image/png'));
+                    
+                    // Add file to zip
+                    const pngFilename = filename.replace(/\.astc$/i, '.png');
+                    zip.file(pngFilename, blob);
+                }
+
+                // Generate and trigger ZIP download
+                const zipBlob = await zip.generateAsync({ type: "blob" });
+                
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(zipBlob);
+                link.download = 'decoded_astc_images.zip';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(link.href);
+
+                updateStatus('ZIP download started!', 'success');
+            } catch (error) {
+                updateStatus('ZIP creation failed: ' + error.message, 'error');
+                console.error('ZIP creation failed:', error);
+            }
+        }
+
+        // Clear all results
+        function clearBatchResults(resetInput = true) {
+            // Clear output container
+            document.getElementById('outputContainer').innerHTML = '';
+            
+            // Reset zip data
+            decodedFilesForZip = {};
+            
+            updateStatus('Results cleared. Ready for new operation.', '');
+            
+            // Hide ZIP button
+            document.getElementById('downloadAllBtn').style.display = 'none';
+            
+            if (resetInput) {
+                document.getElementById('fileInputLabel').textContent = '📁 Choose files or drag & drop here';
+                document.getElementById('fileInput').value = '';
+            }
+            
+            setProgress('fileProgress', 0);
+            setProgress('urlProgress', 0);
+        }
+    </script>
+
+</body>
+</html>
