@@ -5,24 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ASTC Texture Decoder - Batch Mode</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-
     <script>
-      // Tailwind config for dark mode
       tailwind.config = {
         darkMode: 'class',
         theme: {
           extend: {
             colors: {
-              // Charcoal Theme
-              primary: '#36454F', // Charcoal
-              secondary: '#B0C4DE', // Silver-Blue (Premium Accent)
+              primary: '#36454F',
+              secondary: '#B0C4DE',
               accent: '#e74c3c',
               success: '#27ae60',
               warning: '#f39c12',
               error: '#e74c3c',
-              darkbg: '#1C1C1C', // Darker background
+              darkbg: '#1C1C1C',
               lightbg: '#f8fafc',
             }
           }
@@ -92,7 +88,7 @@
             </div>
 
             <div id="outputContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                </div>
+            </div>
             
         </div>
     </div>
@@ -362,15 +358,25 @@
         }
 
         function triggerCanvasDownload(fileData, pngFilename) {
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = fileData.width;
-            tempCanvas.height = fileData.height;
-            const tempCtx = tempCanvas.getContext('2d');
-            drawToCanvas(tempCtx, fileData.data, fileData.width, fileData.height);
+            const scale = 4;
+            const bufferCanvas = document.createElement('canvas');
+            bufferCanvas.width = fileData.width;
+            bufferCanvas.height = fileData.height;
+            const bufferCtx = bufferCanvas.getContext('2d');
+            drawToCanvas(bufferCtx, fileData.data, fileData.width, fileData.height);
+
+            const scaledCanvas = document.createElement('canvas');
+            scaledCanvas.width = fileData.width * scale;
+            scaledCanvas.height = fileData.height * scale;
+            const scaledCtx = scaledCanvas.getContext('2d');
+            
+            scaledCtx.imageSmoothingEnabled = true;
+            scaledCtx.imageSmoothingQuality = 'high';
+            scaledCtx.drawImage(bufferCanvas, 0, 0, scaledCanvas.width, scaledCanvas.height);
 
             const link = document.createElement('a');
             link.download = pngFilename;
-            link.href = tempCanvas.toDataURL('image/png');
+            link.href = scaledCanvas.toDataURL('image/png');
             link.click();
         }
 
@@ -411,17 +417,27 @@
             
             try {
                 const zip = new JSZip();
+                const scale = 4;
 
                 for (const filename in decodedFilesForZip) {
                     const file = decodedFilesForZip[filename];
                     
-                    const tempCanvas = document.createElement('canvas');
-                    tempCanvas.width = file.width;
-                    tempCanvas.height = file.height;
-                    const tempCtx = tempCanvas.getContext('2d');
-                    drawToCanvas(tempCtx, file.data, file.width, file.height);
+                    const bufferCanvas = document.createElement('canvas');
+                    bufferCanvas.width = file.width;
+                    bufferCanvas.height = file.height;
+                    const bufferCtx = bufferCanvas.getContext('2d');
+                    drawToCanvas(bufferCtx, file.data, file.width, file.height);
 
-                    const blob = await new Promise(resolve => tempCanvas.toBlob(resolve, 'image/png'));
+                    const scaledCanvas = document.createElement('canvas');
+                    scaledCanvas.width = file.width * scale;
+                    scaledCanvas.height = file.height * scale;
+                    const scaledCtx = scaledCanvas.getContext('2d');
+
+                    scaledCtx.imageSmoothingEnabled = true;
+                    scaledCtx.imageSmoothingQuality = 'high';
+                    scaledCtx.drawImage(bufferCanvas, 0, 0, scaledCanvas.width, scaledCanvas.height);
+
+                    const blob = await new Promise(resolve => scaledCanvas.toBlob(resolve, 'image/png'));
                     
                     const cleanFilename = filename.startsWith('URL_') ? filename.substring(filename.indexOf('_', 5) + 1) : filename.substring(filename.indexOf('_') + 1);
                     const pngFilename = cleanFilename.replace(/\.astc$/i, '.png');
