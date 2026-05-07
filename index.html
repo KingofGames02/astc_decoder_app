@@ -49,8 +49,16 @@
         
         .sub-title {
             font-size: 0.85rem; font-weight: 700; color: #FFD700; letter-spacing: 1px;
-            text-transform: uppercase; padding: 5px; margin: 0 auto; display: inline-block;
+            animation: glowEffect 1.5s ease-in-out infinite alternate; text-transform: uppercase;
+            padding: 5px; margin: 0 auto; display: inline-block;
         }
+        @keyframes glowEffect {
+            from { text-shadow: 0 0 5px #FFD700, 0 0 10px #FFD700; }
+            to { text-shadow: 0 0 15px #FFD700, 0 0 25px #FF8C00; }
+        }
+
+        .fit-container { flex: 1; min-width: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; width: 100%; }
+        .fit-text { white-space: nowrap; display: inline-block; transform-origin: center; }
 
         .layout-container {
             display: flex; gap: 20px; max-width: 1100px; width: 100%; justify-content: center; flex-wrap: wrap; margin-bottom: 20px;
@@ -176,9 +184,8 @@
 
         .item-id-bottom {
             background: transparent; width: 100%; padding: 4px 2px;
-            display: flex; flex-direction: column; overflow: hidden;
+            display: flex; flex-direction: column; overflow: hidden; align-items: center;
         }
-        .item-id-bottom span { color: #fff; font-weight: 800; font-size: 0.85rem; }
         .item-id-bottom small { color: var(--muted); font-size: 0.7rem; }
 
         .action-row { display: flex; gap: 12px; margin-bottom: 20px; width: 100%; flex-wrap: wrap; }
@@ -189,7 +196,9 @@
 
     <div class="header-container">
         <h1 class="main-title">ASTC Texture Decoder</h1>
-        <div class="sub-title">Icon Decoding and Exporting Tool</div>
+        <div class="fit-container" style="max-width: 90%;">
+            <span class="fit-text" style="color: var(--muted); font-size: 1rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;">ASTC Decompression Tool By KingofGames</span>
+        </div>
     </div>
 
     <div class="layout-container">
@@ -265,12 +274,33 @@
         </div>
     </div>
 
+    <div style="margin-top: 20px; text-align: center; width: 100%;">
+        <div class="sub-title">Made By King of Games</div>
+    </div>
+
     <script src="astc-decode.js"></script>
     <script>
         let decodedFilesForZip = {};
 
+        function fitText() {
+            document.querySelectorAll('.fit-text').forEach(el => {
+                el.style.fontSize = '';
+                let parent = el.parentElement;
+                let parentW = parent.clientWidth;
+                if (parentW === 0) return;
+                let scrollW = el.scrollWidth;
+                if (scrollW > parentW) {
+                    let currentSize = parseFloat(window.getComputedStyle(el).fontSize);
+                    el.style.fontSize = Math.floor(currentSize * (parentW / scrollW)) + 'px';
+                }
+            });
+        }
+
+        window.addEventListener('resize', fitText);
+
         window.addEventListener('load', async () => {
             updateStatus('Initializing tool...', 'loading');
+            fitText();
             try {
                 await initASTCDecoder();
                 updateStatus('ASTC tool ready to use!', 'success');
@@ -488,7 +518,9 @@
             const itemBottom = document.createElement('div');
             itemBottom.className = 'item-id-bottom';
             itemBottom.innerHTML = `
-                <span>${displayFilename}</span>
+                <div class="fit-container" style="margin-bottom: 4px; width: 100%;">
+                    <span class="fit-text" style="color: #fff; font-weight: 800; font-size: 0.85rem;">${displayFilename}</span>
+                </div>
                 <small>${targetWidth} × ${targetHeight}</small>
                 <small>${formatFileSize(astcData.length)}</small>
             `;
@@ -506,6 +538,7 @@
             };
             
             updateDownloadButtons();
+            setTimeout(fitText, 50);
         }
 
         function triggerCanvasDownload(fileData, pngFilename) {
