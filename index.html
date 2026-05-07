@@ -5,24 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ASTC Texture Decoder - Batch Mode</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-
     <script>
-      // Tailwind config for dark mode
       tailwind.config = {
         darkMode: 'class',
         theme: {
           extend: {
             colors: {
-              // Charcoal Theme
-              primary: '#36454F', // Charcoal
-              secondary: '#B0C4DE', // Silver-Blue (Premium Accent)
+              primary: '#36454F',
+              secondary: '#B0C4DE',
               accent: '#e74c3c',
               success: '#27ae60',
               warning: '#f39c12',
               error: '#e74c3c',
-              darkbg: '#1C1C1C', // Darker background
+              darkbg: '#1C1C1C',
               lightbg: '#f8fafc',
             }
           }
@@ -92,7 +88,7 @@
             </div>
 
             <div id="outputContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                </div>
+            </div>
             
         </div>
     </div>
@@ -307,8 +303,15 @@
                     await initASTCDecoder();
                 }
                 
-                const header = parseASTCHeader(astcData);
+                let header = parseASTCHeader(astcData);
                 const decodedData = decodeASTCTexture(astcData);
+                const displayFilename = filename.startsWith('URL_') ? filename.substring(filename.indexOf('_', 5) + 1) : filename.substring(filename.indexOf('_') + 1);
+                
+                if (displayFilename.startsWith('9250')) {
+                    header.width = 96;
+                    header.height = 150;
+                    header.dimensions = "96x150";
+                }
                 
                 const container = document.getElementById('outputContainer');
                 const card = document.createElement('div');
@@ -325,8 +328,6 @@
                 if (!success) {
                     throw new Error('Failed to draw to canvas');
                 }
-                
-                const displayFilename = filename.startsWith('URL_') ? filename.substring(filename.indexOf('_', 5) + 1) : filename.substring(filename.indexOf('_') + 1);
 
                 const infoDiv = document.createElement('div');
                 infoDiv.className = 'space-y-1 text-sm text-gray-300 mt-auto';
