@@ -97,12 +97,15 @@ function decodeASTCTexture(astcData) {
         const returnPointer = wasm.__wbindgen_add_to_stack_pointer(-16);
         const dataPointer = passArray8ToWasm0(compressedData, wasm.__wbindgen_malloc);
 
+        const paddedWidth = Math.ceil(header.width / header.blockWidth) * header.blockWidth;
+        const paddedHeight = Math.ceil(header.height / header.blockHeight) * header.blockHeight;
+
         wasm.astcDecode(
             returnPointer,
             dataPointer,
             WASM_VECTOR_LEN,
-            header.width,
-            header.height,
+            paddedWidth,
+            paddedHeight,
             header.blockWidth,
             header.blockHeight
         );
@@ -113,8 +116,6 @@ function decodeASTCTexture(astcData) {
         const decodedImage = getArrayU8FromWasm0(resultPointer, resultLength).slice();
         wasm.__wbindgen_free(resultPointer, resultLength * 1);
 
-        const paddedWidth = Math.ceil(header.width / header.blockWidth) * header.blockWidth;
-        const paddedHeight = Math.ceil(header.height / header.blockHeight) * header.blockHeight;
         const trueSize = header.width * header.height * 4;
 
         if (paddedWidth !== header.width || paddedHeight !== header.height) {
@@ -174,8 +175,6 @@ function createValidImageData(decodedData, width, height) {
     const expectedSize = width * height * 4;
 
     if (decodedData.length !== expectedSize) {
-        console.warn(`ImageData size correction: ${decodedData.length} → ${expectedSize} bytes`);
-
         const properData = new Uint8ClampedArray(expectedSize);
         const copyLength = Math.min(decodedData.length, expectedSize);
 
