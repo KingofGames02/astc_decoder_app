@@ -302,50 +302,55 @@
                     updateStatus('Initializing decoder...', 'loading');
                     await initASTCDecoder();
                 }
+
+                const displayFilename = filename.startsWith('URL_') ? filename.substring(filename.indexOf('_', 5) + 1) : filename.substring(filename.indexOf('_') + 1);
+                
+                const sizeMap = {
+                    '9250': { w: 96, h: 150 },
+                    '9130': { w: 196, h: 164 }
+                };
+
+                for (const prefix in sizeMap) {
+                    if (displayFilename.startsWith(prefix)) {
+                        const targetW = sizeMap[prefix].w;
+                        const targetH = sizeMap[prefix].h;
+                        
+                        astcData[7] = targetW & 0xFF;
+                        astcData[8] = (targetW >> 8) & 0xFF;
+                        astcData[9] = (targetW >> 16) & 0xFF;
+
+                        astcData[10] = targetH & 0xFF;
+                        astcData[11] = (targetH >> 8) & 0xFF;
+                        astcData[12] = (targetH >> 16) & 0xFF;
+                        break;
+                    }
+                }
                 
                 const header = parseASTCHeader(astcData);
                 const decodedData = decodeASTCTexture(astcData);
-                const displayFilename = filename.startsWith('URL_') ? filename.substring(filename.indexOf('_', 5) + 1) : filename.substring(filename.indexOf('_') + 1);
-                
-                let targetWidth = header.width;
-                let targetHeight = header.height;
-
-                if (displayFilename.startsWith('9250')) {
-                    targetWidth = 96;
-                    targetHeight = 150;
-                }
                 
                 const container = document.getElementById('outputContainer');
                 const card = document.createElement('div');
                 card.className = 'bg-gray-800 rounded-xl p-4 shadow-lg flex flex-col';
 
-                const tempCanvas = document.createElement('canvas');
-                tempCanvas.width = header.width;
-                tempCanvas.height = header.height;
-                const tempCtx = tempCanvas.getContext('2d');
+                const newCanvas = document.createElement('canvas');
+                newCanvas.width = header.width;
+                newCanvas.height = header.height;
+                newCanvas.className = 'max-w-full rounded border border-secondary mb-3';
+                const newCtx = newCanvas.getContext('2d');
                 
-                const success = drawToCanvas(tempCtx, decodedData, header.width, header.height);
+                const success = drawToCanvas(newCtx, decodedData, header.width, header.height);
                 
                 if (!success) {
                     throw new Error('Failed to draw to canvas');
                 }
 
-                const newCanvas = document.createElement('canvas');
-                newCanvas.width = targetWidth;
-                newCanvas.height = targetHeight;
-                newCanvas.className = 'max-w-full rounded border border-secondary mb-3';
-                const newCtx = newCanvas.getContext('2d');
-                
-                newCtx.imageSmoothingEnabled = true;
-                newCtx.imageSmoothingQuality = 'high';
-                newCtx.drawImage(tempCanvas, 0, 0, targetWidth, targetHeight);
-
                 const infoDiv = document.createElement('div');
                 infoDiv.className = 'space-y-1 text-sm text-gray-300 mt-auto';
                 infoDiv.innerHTML = `
                     <h4 class="text-lg font-bold text-secondary truncate mb-2" title="${displayFilename}">${displayFilename}</h4>
-                    <div class="flex justify-between py-1 border-b border-gray-700"><span>Original:</span> <span>${header.width} × ${header.height}</span></div>
-                    <div class="flex justify-between py-1 border-b border-gray-700"><span>Rendered:</span> <span class="${targetWidth !== header.width ? 'text-warning font-bold' : ''}">${targetWidth} × ${targetHeight}</span></div>
+                    <div class="flex justify-between py-1 border-b border-gray-700"><span>Dimensions:</span> <span>${header.width} × ${header.height}</span></div>
+                    <div class="flex justify-between py-1 border-b border-gray-700"><span>Block Size:</span> <span>${header.blockSize}</span></div>
                     <div class="flex justify-between py-1 border-b border-gray-700"><span>File Size:</span> <span>${formatFileSize(astcData.length)}</span></div>
                     <div class="flex justify-between py-1"><span>Decoded Size:</span> <span>${formatFileSize(decodedData.length)}</span></div>
                 `;
@@ -356,10 +361,8 @@
                 
                 decodedFilesForZip[filename] = {
                     data: decodedData,
-                    originalWidth: header.width,
-                    originalHeight: header.height,
-                    targetWidth: targetWidth,
-                    targetHeight: targetHeight
+                    width: header.width,
+                    height: header.height
                 };
                 
                 updateDownloadButtons();
@@ -376,24 +379,15 @@
         }
 
         function triggerCanvasDownload(fileData, pngFilename) {
-            const bufferCanvas = document.createElement('canvas');
-            bufferCanvas.width = fileData.originalWidth;
-            bufferCanvas.height = fileData.originalHeight;
-            const bufferCtx = bufferCanvas.getContext('2d');
-            drawToCanvas(bufferCtx, fileData.data, fileData.originalWidth, fileData.originalHeight);
-
-            const targetCanvas = document.createElement('canvas');
-            targetCanvas.width = fileData.targetWidth;
-            targetCanvas.height = fileData.targetHeight;
-            const targetCtx = targetCanvas.getContext('2d');
-            
-            targetCtx.imageSmoothingEnabled = true;
-            targetCtx.imageSmoothingQuality = 'high';
-            targetCtx.drawImage(bufferCanvas, 0, 0, fileData.targetWidth, fileData.targetHeight);
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = fileData.width;
+            tempCanvas.height = fileData.height;
+            const tempCtx = tempCanvas.getContext('2d');
+            drawToCanvas(tempCtx, fileData.data, fileData.width, fileData.height);
 
             const link = document.createElement('a');
             link.download = pngFilename;
-            link.href = targetCanvas.toDataURL('image/png');
+            link.href = tempCanvas.toDataURL('image/png');
             link.click();
         }
 
@@ -438,22 +432,13 @@
                 for (const filename in decodedFilesForZip) {
                     const file = decodedFilesForZip[filename];
                     
-                    const bufferCanvas = document.createElement('canvas');
-                    bufferCanvas.width = file.originalWidth;
-                    bufferCanvas.height = file.originalHeight;
-                    const bufferCtx = bufferCanvas.getContext('2d');
-                    drawToCanvas(bufferCtx, file.data, file.originalWidth, file.originalHeight);
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = file.width;
+                    tempCanvas.height = file.height;
+                    const tempCtx = tempCanvas.getContext('2d');
+                    drawToCanvas(tempCtx, file.data, file.width, file.height);
 
-                    const targetCanvas = document.createElement('canvas');
-                    targetCanvas.width = file.targetWidth;
-                    targetCanvas.height = file.targetHeight;
-                    const targetCtx = targetCanvas.getContext('2d');
-                    
-                    targetCtx.imageSmoothingEnabled = true;
-                    targetCtx.imageSmoothingQuality = 'high';
-                    targetCtx.drawImage(bufferCanvas, 0, 0, file.targetWidth, file.targetHeight);
-
-                    const blob = await new Promise(resolve => targetCanvas.toBlob(resolve, 'image/png'));
+                    const blob = await new Promise(resolve => tempCanvas.toBlob(resolve, 'image/png'));
                     
                     const cleanFilename = filename.startsWith('URL_') ? filename.substring(filename.indexOf('_', 5) + 1) : filename.substring(filename.indexOf('_') + 1);
                     const pngFilename = cleanFilename.replace(/\.astc$/i, '.png');
