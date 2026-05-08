@@ -197,8 +197,8 @@
     <div class="header-container">
         <h1 class="main-title">ASTC Texture Decoder</h1>
         <div class="fit-container" style="max-width: 90%; font-size: 0.5rem;">
-         <span class="fit-text" style="color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: 1px;">ASTC Decompression Tool By KingofGames</span>
-       </div>
+            <span class="fit-text" style="color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: 1px;">ASTC Decompression Tool By KingofGames</span>
+        </div>
     </div>
 
     <div class="layout-container">
@@ -215,8 +215,8 @@
             </div>
 
             <div class="input-group">
-                <label>Item ID</label>
-                <input type="text" id="itemIDInput" placeholder="Enter Item ID here...">
+                <label>Item IDs</label>
+                <input type="text" id="itemIDInput" placeholder="Enter Item IDs (comma separated)...">
             </div>
 
             <div class="progress-bar">
@@ -385,64 +385,81 @@
         }
 
         async function loadFromURL() {
-            const itemId = document.getElementById('itemIDInput').value.trim();
+            const inputVal = document.getElementById('itemIDInput').value;
             const isAdvance = document.getElementById('serverToggle').checked;
             
-            if (!itemId) {
-                updateStatus('Please enter the Item ID', 'error');
+            const rawIds = inputVal.split(',').map(id => id.trim()).filter(id => id !== '');
+            
+            if (rawIds.length === 0) {
+                updateStatus('Please enter at least one Item ID', 'error');
                 return;
             }
 
             const server = isAdvance ? 'advance' : 'live';
-            const url = `https://dl.cdn.freefiremobile.com/${server}/ABHotUpdates/IconCDN/android/${itemId}_rgb.astc`;
+            let successCount = 0;
+            let failCount = 0;
 
-            try {
-                updateStatus('Downloading from server...', 'loading');
-                document.getElementById('urlProgress').style.width = '10%';
-                
-                const response = await fetch(url);
-                
-                if (!response.ok) {
-                    throw new Error("Incorrect ID or icon is not currently available on the server");
-                }
+            updateStatus(`Downloading ${rawIds.length} file(s) from server...`, 'loading');
 
-                const contentLength = response.headers.get('content-length');
-                let receivedLength = 0;
-                
-                if (contentLength) {
-                    const reader = response.body.getReader();
-                    const chunks = [];
+            for (let i = 0; i < rawIds.length; i++) {
+                const itemId = rawIds[i];
+                const url = `https://dl.cdn.freefiremobile.com/${server}/ABHotUpdates/IconCDN/android/${itemId}_rgb.astc`;
+
+                try {
+                    const response = await fetch(url);
                     
-                    while(true) {
-                        const {done, value} = await reader.read();
-                        if (done) break;
-                        chunks.push(value);
-                        receivedLength += value.length;
-                        document.getElementById('urlProgress').style.width = (receivedLength / contentLength * 100) + '%';
+                    if (!response.ok) {
+                        throw new Error(`ID ${itemId} not found`);
                     }
+
+                    const contentLength = response.headers.get('content-length');
+                    let receivedLength = 0;
                     
-                    const astcData = new Uint8Array(receivedLength);
-                    let position = 0;
-                    for(let chunk of chunks) {
-                        astcData.set(chunk, position);
-                        position += chunk.length;
+                    if (contentLength) {
+                        const reader = response.body.getReader();
+                        const chunks = [];
+                        
+                        while(true) {
+                            const {done, value} = await reader.read();
+                            if (done) break;
+                            chunks.push(value);
+                            receivedLength += value.length;
+                            
+                            const fileProgress = (receivedLength / contentLength);
+                            const totalProgress = ((i + fileProgress) / rawIds.length) * 100;
+                            document.getElementById('urlProgress').style.width = totalProgress + '%';
+                        }
+                        
+                        const astcData = new Uint8Array(receivedLength);
+                        let position = 0;
+                        for(let chunk of chunks) {
+                            astcData.set(chunk, position);
+                            position += chunk.length;
+                        }
+                        
+                        const filename = `${itemId}_rgb.astc`;
+                        await processASTCData(astcData, filename);
+                    } else {
+                        const arrayBuffer = await response.arrayBuffer();
+                        document.getElementById('urlProgress').style.width = ((i + 1) / rawIds.length * 100) + '%';
+                        const filename = `${itemId}_rgb.astc`;
+                        await processASTCData(new Uint8Array(arrayBuffer), filename);
                     }
-                    
-                    const filename = `${itemId}_rgb.astc`;
-                    await processASTCData(astcData, filename);
-                } else {
-                    const arrayBuffer = await response.arrayBuffer();
-                    document.getElementById('urlProgress').style.width = '100%';
-                    const filename = `${itemId}_rgb.astc`;
-                    await processASTCData(new Uint8Array(arrayBuffer), filename);
+                    successCount++;
+                } catch (error) {
+                    failCount++;
                 }
-                
-                updateStatus('Downloaded and decoded successfully', 'success');
-            } catch (error) {
-                updateStatus(error.message, 'error');
-            } finally {
-                setTimeout(() => { document.getElementById('urlProgress').style.width = '0%'; }, 2000);
             }
+
+            if (failCount === 0) {
+                updateStatus(`Successfully downloaded and decoded ${successCount} file(s)`, 'success');
+            } else if (successCount > 0) {
+                updateStatus(`Completed: ${successCount} success, ${failCount} failed`, 'error');
+            } else {
+                updateStatus('Failed to download the provided ID(s)', 'error');
+            }
+
+            setTimeout(() => { document.getElementById('urlProgress').style.width = '0%'; }, 2000);
         }
 
         async function decodeASTCFile(file) {
