@@ -3,10 +3,11 @@
 A professional-grade, browser-based tool for decoding [ASTC (Adaptive Scalable Texture Compression)](https://en.wikipedia.org/wiki/Adaptive_Scalable_Texture_Compression) files. This project uses WebAssembly for high-performance decoding and supports batch processing.
 
 This tool allows you to:
-* **Batch Upload:** Upload multiple `.astc` files from your device.
-* **Load from URL:** Load individual `.astc` files from a web URL.
+* **Load from Device:** Upload multiple `.astc` files directly from your device.
+* **Load from FF Server:** Input single or multiple Item IDs (comma-separated) to automatically fetch and decode `.astc` files.
+* **Server Toggle:** Seamlessly switch between Free Fire "LIVE" and "ADVANCE" servers to fetch the correct assets.
 * **Cumulative Decoding:** Decode multiple batches; new results are added to the page without clearing previous ones.
-* **Instant Preview:** Preview each decoded image on its own canvas.
+* **Instant Preview:** Preview each decoded image on its own responsive canvas.
 * **Flexible Downloads:**
     * **Download PNG(s):** Download one or more images as individual `.png` files.
     * **Download All as ZIP:** Download multiple images (2 or more) as a single, convenient `.zip` file.
